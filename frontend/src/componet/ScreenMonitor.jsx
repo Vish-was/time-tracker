@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import html2canvas from "html2canvas";
+import { v4 as uuidv4 } from "uuid";
 export default function ScreenMonitor() {
   const [isStarted, setIsStarted] = useState(false);
   const [deviceInfo, setDeviceInfo] = useState({});
@@ -109,6 +110,18 @@ export default function ScreenMonitor() {
     };
   }, [isStarted, isAdmin]);
 
+function getOrCreateUUID() {
+  let uid = localStorage.getItem("deviceUUID");
+  
+  if (!uid) {
+    uid = uuidv4();
+    localStorage.setItem("deviceUUID", uid);
+
+    document.cookie = `deviceUUID=${uid}; path=/; max-age=${60 * 60 * 24 * 365}`;
+  }
+
+  return uid;
+}
 
   useEffect(() => {
     if (!isStarted || isAdmin) return;
@@ -129,6 +142,7 @@ export default function ScreenMonitor() {
           console.error("Capture failed:", err);
         }
       };
+  const uuid = getOrCreateUUID();
 
       captureAndUpload();
     }
@@ -388,7 +402,7 @@ export default function ScreenMonitor() {
       const formData = new FormData();
       formData.append("image", blob, `screenshot_${Date.now()}.png`);
       formData.append("deviceInfo", JSON.stringify(info));
-      formData.append("userId", "1233");
+      formData.append("deviceUUID", localStorage.getItem("deviceUUID"));
 
       const response = await fetch("https://screenshot-chapter.onrender.com/upload-screenshot", {
               // const response = await fetch("http://localhost:5000/upload-screenshot", {

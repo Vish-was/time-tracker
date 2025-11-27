@@ -50,7 +50,7 @@ export default function ViewScreenshots() {
   const [osFilter, setOsFilter] = useState("");
   const [browserFilter, setBrowserFilter] = useState("");
   const [macFilter, setMacFilter] = useState("");
-
+  const [uuidFilter, setUuidFilter] = useState("");
   const [macNames, setMacNames] = useState({});
   const [showMacManager, setShowMacManager] = useState(false);
   const [selectedMacForEdit, setSelectedMacForEdit] = useState("");
@@ -133,15 +133,18 @@ export default function ViewScreenshots() {
         item.serverMac?.toLowerCase().includes(macFilter.toLowerCase())
       );
     }
+      if (uuidFilter) {
+    filtered = filtered.filter((item) =>
+      item.deviceUUID?.toLowerCase().includes(uuidFilter.toLowerCase())
+    );
+  }
 
     setFilteredData(filtered);
-  }, [dateFilter, osFilter, browserFilter, macFilter, data]);
+  }, [dateFilter, osFilter, browserFilter, macFilter, data,uuidFilter]);
 
   // Unique values for dropdowns
   const uniqueOS = [...new Set(data.map((item) => item.deviceInfo?.os).filter(Boolean))];
-  const uniqueBrowsers = [
-    ...new Set(data.map((item) => item.deviceInfo?.browser).filter(Boolean)),
-  ];
+  const uniqueUUIDs = [...new Set(data.map((item) => item.deviceUUID).filter(Boolean))];
   const uniqueDates = [
     ...new Set(data.map((item) => new Date(item.createdAt).toLocaleDateString())),
   ];
@@ -753,37 +756,30 @@ export default function ViewScreenshots() {
               </select>
             </div>
 
-            <div>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "8px",
-                  fontWeight: "bold",
-                  color: "#34495e",
-                }}
-              >
-                🌐 Browser
-              </label>
-              <select
-                value={browserFilter}
-                onChange={(e) => setBrowserFilter(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "8px",
-                  border: "2px solid #e9ecef",
-                  backgroundColor: "white",
-                  fontSize: "14px",
-                }}
-              >
-                <option value="">All Browsers</option>
-                {uniqueBrowsers.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-            </div>
+           <div>
+  <label style={{ display: "block", marginBottom: "8px", fontWeight: "bold", color: "#34495e" }}>
+    🆔 Device UUID
+  </label>
+  <select
+    value={uuidFilter}
+    onChange={(e) => setUuidFilter(e.target.value)}
+    style={{
+      width: "100%",
+      padding: "10px",
+      borderRadius: "8px",
+      border: "2px solid #e9ecef",
+      backgroundColor: "white",
+      fontSize: "14px",
+    }}
+  >
+    <option value="">All UUIDs</option>
+    {uniqueUUIDs.map((uuid) => (
+      <option key={uuid} value={uuid}>
+        {uuid}
+      </option>
+    ))}
+  </select>
+</div>
 
             <div>
               <label

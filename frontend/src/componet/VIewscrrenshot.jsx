@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-const API_BASE ="https://screenshot-chapter.onrender.com" || "http://localhost:5000" ;
+const API_BASE = "https://screenshot-chapter.onrender.com";
+// const API_BASE = "http://localhost:5000";
+
 async function updateMacNameOnServer(serverMac, macname) {
   try {
     const res = await fetch(`${API_BASE}/update/macname`, {
@@ -21,7 +23,6 @@ async function updateMacNameOnServer(serverMac, macname) {
   }
 }
 
-// 🔹 Backend pe name clear karne ka helper
 async function clearMacNameOnServer(serverMac) {
   try {
     const res = await fetch(`${API_BASE}/clear/macname`, {
@@ -80,14 +81,18 @@ export default function ViewScreenshots() {
     return macNames[mac] || "";
   };
 
-  // Fetch screenshots
   const fetchScreenshots = async () => {
     try {
       setLoading(true);
-      const res = await fetch("https://screenshot-chapter.onrender.com/screenshots");
+      const res = await fetch(`${API_BASE}/screenshots`);
       const json = await res.json();
-      setData(json.screenshots || []);
-      setFilteredData(json.screenshots || []);
+      const list = (json.screenshots || []).slice().sort((a, b) => {
+        const da = new Date(a.createdAt).getTime();
+        const db = new Date(b.createdAt).getTime();
+        return db - da; 
+      });
+      setData(list);
+      setFilteredData(list);
     } catch (error) {
       console.error("Error fetching screenshots:", error);
     } finally {
@@ -95,7 +100,6 @@ export default function ViewScreenshots() {
     }
   };
 
-  // Convert Google Drive URL to embedded view URL
   const getEmbeddedImageUrl = (driveUrl) => {
     if (!driveUrl) return null;
 
@@ -133,14 +137,15 @@ export default function ViewScreenshots() {
         item.serverMac?.toLowerCase().includes(macFilter.toLowerCase())
       );
     }
-      if (uuidFilter) {
-    filtered = filtered.filter((item) =>
-      item.deviceUUID?.toLowerCase().includes(uuidFilter.toLowerCase())
-    );
-  }
+    if (uuidFilter) {
+      filtered = filtered.filter((item) =>
+        item.deviceUUID?.toLowerCase().includes(uuidFilter.toLowerCase())
+      );
+    }
 
+    // order already newest-first from data, filter sirf subset le raha hai
     setFilteredData(filtered);
-  }, [dateFilter, osFilter, browserFilter, macFilter, data,uuidFilter]);
+  }, [dateFilter, osFilter, browserFilter, macFilter, uuidFilter, data]);
 
   // Unique values for dropdowns
   const uniqueOS = [...new Set(data.map((item) => item.deviceInfo?.os).filter(Boolean))];
@@ -155,6 +160,7 @@ export default function ViewScreenshots() {
     setOsFilter("");
     setBrowserFilter("");
     setMacFilter("");
+    setUuidFilter("");
   };
 
   useEffect(() => {
@@ -268,7 +274,6 @@ export default function ViewScreenshots() {
     );
   };
 
-  // MAC Name Manager "page" (overlay)
   const MacNameManager = () => {
     const [search, setSearch] = useState(selectedMacForEdit || "");
     const [localNames, setLocalNames] = useState(macNames || {});
@@ -288,13 +293,11 @@ export default function ViewScreenshots() {
       }));
     };
 
-    // 🔹 Yaha Save All pe backend bhi hit hoga
     const handleSaveAll = async () => {
       persistMacNames(localNames);
 
       const entries = Object.entries(localNames);
 
-      // har MAC ke liye backend call
       await Promise.all(
         entries.map(([mac, name]) => {
           const trimmed = (name || "").trim();
@@ -504,14 +507,14 @@ export default function ViewScreenshots() {
                       }}
                     />
                     <button
-                      onClick={async () => {
+                      onClick={async (e) => {
+                        e.stopPropagation();
                         const updated = {
                           ...localNames,
                           [mac]: "",
                         };
                         handleChange(mac, "");
                         persistMacNames(updated);
-                        // 🔹 single clear pe backend call
                         await clearMacNameOnServer(mac);
                       }}
                       style={{
@@ -756,30 +759,37 @@ export default function ViewScreenshots() {
               </select>
             </div>
 
-           <div>
-  <label style={{ display: "block", marginBottom: "8px", fontWeight: "bold", color: "#34495e" }}>
-    🆔 Device UUID
-  </label>
-  <select
-    value={uuidFilter}
-    onChange={(e) => setUuidFilter(e.target.value)}
-    style={{
-      width: "100%",
-      padding: "10px",
-      borderRadius: "8px",
-      border: "2px solid #e9ecef",
-      backgroundColor: "white",
-      fontSize: "14px",
-    }}
-  >
-    <option value="">All UUIDs</option>
-    {uniqueUUIDs.map((uuid) => (
-      <option key={uuid} value={uuid}>
-        {uuid}
-      </option>
-    ))}
-  </select>
-</div>
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "8px",
+                  fontWeight: "bold",
+                  color: "#34495e",
+                }}
+              >
+                🆔 Device UUID
+              </label>
+              <select
+                value={uuidFilter}
+                onChange={(e) => setUuidFilter(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "8px",
+                  border: "2px solid #e9ecef",
+                  backgroundColor: "white",
+                  fontSize: "14px",
+                }}
+              >
+                <option value="">All UUIDs</option>
+                {uniqueUUIDs.map((uuid) => (
+                  <option key={uuid} value={uuid}>
+                    {uuid}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div>
               <label
@@ -947,7 +957,6 @@ export default function ViewScreenshots() {
                     </div>
                   )}
 
-                  {/* Server MAC with name + Edit button */}
                   {item.serverMac && (
                     <p style={{ margin: "8px 0", fontSize: "14px" }}>
                       <b>🔗 Server:</b>{" "}
@@ -996,3 +1005,4 @@ export default function ViewScreenshots() {
     </>
   );
 }
+

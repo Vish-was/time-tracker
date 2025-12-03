@@ -39,6 +39,8 @@ export default function ScreenMonitor() {
   const LAST_CAPTURE_TIME_KEY = "screenMonitor_lastCapture";
   const CAPTURE_COUNT_KEY = "screenMonitor_captureCount";
 
+  const [multipleInstanceError, setMultipleInstanceError] = useState("");
+
   useEffect(() => {
     const detectBrowser = () => {
       const userAgent = navigator.userAgent.toLowerCase();
@@ -56,6 +58,41 @@ export default function ScreenMonitor() {
     };
 
     detectBrowser();
+
+    const thisTabId = `screenMonitor_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const activeTabKey = "screenMonitor_activeTab";
+
+    const existingActiveTab = localStorage.getItem(activeTabKey);
+    if (existingActiveTab && existingActiveTab !== thisTabId) {
+      setMultipleInstanceError("use only one Screen");
+      return;
+    }
+
+    localStorage.setItem(activeTabKey, thisTabId);
+
+    window.addEventListener('beforeunload', () => {
+      const currentActive = localStorage.getItem(activeTabKey);
+      if (currentActive === thisTabId) {
+        localStorage.removeItem(activeTabKey);
+      }
+    });
+
+    const checkActiveInstance = setInterval(() => {
+      const currentActive = localStorage.getItem(activeTabKey);
+      if (currentActive !== thisTabId && currentActive) {
+        setMultipleInstanceError("use only one Screen");
+      } else {
+        setMultipleInstanceError("");
+      }
+    }, 2000);
+
+    return () => {
+      clearInterval(checkActiveInstance);
+      const currentActive = localStorage.getItem(activeTabKey);
+      if (currentActive === thisTabId) {
+        localStorage.removeItem(activeTabKey);
+      }
+    };
   }, []);
 
   // 🔐 Fallback ID generation
@@ -917,6 +954,61 @@ export default function ScreenMonitor() {
             Screen capture is automatically disabled for admin users for
             security reasons.
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (multipleInstanceError) {
+    return (
+      <div
+        style={{
+          padding: 20,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          textAlign: "center",
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          color: "white",
+        }}
+      >
+        <div
+          style={{
+            background: "rgba(255, 255, 255, 0.1)",
+            padding: 30,
+            borderRadius: 15,
+            backdropFilter: "blur(10px)",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+            maxWidth: 500,
+            width: "100%",
+          }}
+        >
+          <div style={{ fontSize: 48, marginBottom: 15 }}>⚠️</div>
+          <h1 style={{ margin: "0 0 10px 0", fontSize: 24 }}>
+            Multiple Tabs Detected
+          </h1>
+          <p
+            style={{
+              margin: 0,
+              opacity: 0.9,
+              fontSize: 16,
+              lineHeight: 1.4,
+            }}
+          >
+            {multipleInstanceError}
+          </p>
+          <div style={{
+            fontSize: 14,
+            marginTop: 15,
+            opacity: 0.7,
+            padding: "10px",
+            background: "rgba(255, 255, 255, 0.1)",
+            borderRadius: "8px"
+          }}>
+            <strong>Solution:</strong> Close this tab and use only one Screen Monitor instance
+          </div>
         </div>
       </div>
     );

@@ -34,6 +34,8 @@ app.use(cookieParser());
 // Connect DB
 connectDB();
 app.use("/api/auth", require("./routes/authRoutes.js"));
+app.use("/Deviceupdate",require("./deviceuuidroute/Deviceuuidroute.js"))
+app.use("/Deviceclear",require("./deviceclearuuidroute/deviceclearuuidroute.js"))
 app.use("/update", require("./updateroutes/updateroutes.js"));
 app.use("/clear", require("./clearmac/clearmacroutes.js"));
 
@@ -799,14 +801,3 @@ app.get("/health", (req, res) => {
 
 const PORT = 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-
-
-
-
-
-
-
-
-
-
-

@@ -844,12 +844,8 @@ export default function ScreenMonitor() {
         <span style="font-size: 18px;">⏹️</span>
         <div>
           <strong>Timer Paused</strong>
-          <div style="font-size: 12px; opacity: 0.9;">Current time: ${formatTimer(timerValue)}</div>
-          <div style="font-size: 11px; opacity: 0.8; margin-top: 3px;">
-            Total captures today: ${captureCount}
-          </div>
           <div style="font-size: 10px; opacity: 0.7; margin-top: 2px;">
-            Click "Resume Your Day" to continue from ${formatTimer(timerValue)}
+            Click "Resume Your Day" to continue 
           </div>
         </div>
       </div>

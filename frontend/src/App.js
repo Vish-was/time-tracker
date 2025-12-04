@@ -143,7 +143,7 @@ function AppContent() {
               e.target.style.transform = "scale(1)";
             }}
           >
-            🚪 Logout ({user.name})
+          Logout
           </button>
         ) : (
     

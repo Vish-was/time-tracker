@@ -41,6 +41,42 @@ async function clearMacNameOnServer(serverMac) {
   }
 }
 
+async function updateDeviceUUIDNameOnServer(deviceUUID, deviceUUIDname) {
+  try {
+    const res = await fetch(`${API_BASE}/Deviceupdate/deviceUUID`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ deviceUUID, deviceUUIDname }),
+    });
+
+    if (!res.ok) {
+      console.error("Failed to update deviceUUID name on server:", await res.text());
+    }
+  } catch (err) {
+    console.error("Error calling /Deviceupdate/deviceUUID:", err);
+  }
+}
+
+async function clearDeviceUUIDNameOnServer(deviceUUID) {
+  try {
+    const res = await fetch(`${API_BASE}/Deviceclear/deviceUUID`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ deviceUUID }),
+    });
+
+    if (!res.ok) {
+      console.error("Failed to clear deviceUUID name on server:", await res.text());
+    }
+  } catch (err) {
+    console.error("Error calling /Deviceclear/deviceUUID:", err);
+  }
+}
+
 export default function ViewScreenshots() {
   const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
@@ -53,17 +89,25 @@ export default function ViewScreenshots() {
   const [macFilter, setMacFilter] = useState("");
   const [uuidFilter, setUuidFilter] = useState("");
   const [macNames, setMacNames] = useState({});
+  const [deviceUUIDNames, setDeviceUUIDNames] = useState({});
   const [showMacManager, setShowMacManager] = useState(false);
+  const [showDeviceManager, setShowDeviceManager] = useState(false);
+  const [selectDeviceUUIDForEdit, setSelectDeviceUUIDForEdit] = useState("");
   const [selectedMacForEdit, setSelectedMacForEdit] = useState("");
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("macNames");
-      if (stored) {
-        setMacNames(JSON.parse(stored));
+      const storedMacNames = localStorage.getItem("macNames");
+      if (storedMacNames) {
+        setMacNames(JSON.parse(storedMacNames));
+      }
+      
+      const storedDeviceNames = localStorage.getItem("deviceUUIDNames");
+      if (storedDeviceNames) {
+        setDeviceUUIDNames(JSON.parse(storedDeviceNames));
       }
     } catch (err) {
-      console.error("Error reading macNames from localStorage:", err);
+      console.error("Error reading names from localStorage:", err);
     }
   }, []);
 
@@ -76,9 +120,23 @@ export default function ViewScreenshots() {
     }
   };
 
+  const persistDeviceUUIDNames = (updated) => {
+    setDeviceUUIDNames(updated);
+    try {
+      localStorage.setItem("deviceUUIDNames", JSON.stringify(updated));
+    } catch (err) {
+      console.error("Error saving deviceUUIDNames to localStorage:", err);
+    }
+  };
+
   const getMacLabel = (mac) => {
     if (!mac) return "";
     return macNames[mac] || "";
+  };
+
+  const getDeviceUUIDLabel = (uuid) => {
+    if (!uuid) return "";
+    return deviceUUIDNames[uuid] || "";
   };
 
   const fetchScreenshots = async () => {
@@ -143,7 +201,6 @@ export default function ViewScreenshots() {
       );
     }
 
-    // order already newest-first from data, filter sirf subset le raha hai
     setFilteredData(filtered);
   }, [dateFilter, osFilter, browserFilter, macFilter, uuidFilter, data]);
 
@@ -194,7 +251,9 @@ export default function ViewScreenshots() {
             maxHeight: "95%",
             height: "800px",
             backgroundColor: "white",
-            marginTop: "16px",
+            marginTop: "20px",
+            marginLeft:"16px",
+            marginRight:"16px",
             borderRadius: "12px",
             padding: "20px",
             boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
@@ -448,7 +507,7 @@ export default function ViewScreenshots() {
                   fontSize: "0.95rem",
                 }}
               >
-                Koi MAC address nahi mila. Pehle screenshots load hone do.
+                No MAC addresses found. Wait for screenshots to load.
               </div>
             ) : (
               filteredMacs.map((mac) => (
@@ -538,6 +597,270 @@ export default function ViewScreenshots() {
     );
   };
 
+  const DeviceUUIDNameManager = () => {
+    const [search, setSearch] = useState(selectDeviceUUIDForEdit || "");
+    const [localNames, setLocalNames] = useState(deviceUUIDNames || {});
+
+    useEffect(() => {
+      setLocalNames(deviceUUIDNames || {});
+    }, [deviceUUIDNames]);
+
+    const filteredUUIDs = uniqueUUIDs
+      .filter((uuid) => uuid.toLowerCase().includes(search.toLowerCase()))
+      .sort();
+
+    const handleChange = (uuid, value) => {
+      setLocalNames((prev) => ({
+        ...prev,
+        [uuid]: value,
+      }));
+    };
+
+    const handleSaveAll = async () => {
+      persistDeviceUUIDNames(localNames);
+
+      const entries = Object.entries(localNames);
+
+      await Promise.all(
+        entries.map(([uuid, name]) => {
+          const trimmed = (name || "").trim();
+          if (trimmed) {
+            return updateDeviceUUIDNameOnServer(uuid, trimmed);
+          } else {
+            return clearDeviceUUIDNameOnServer(uuid);
+          }
+        })
+      );
+
+      setShowDeviceManager(false);
+      setSelectDeviceUUIDForEdit("");
+    };
+
+    return (
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.65)",
+          display: "flex",
+          paddingTop: "30px",
+          justifyContent: "center",
+          zIndex: 1200,
+        }}
+        onClick={() => setShowDeviceManager(false)}
+      >
+        <div
+          style={{
+            width: "95%",
+            maxWidth: "800px",
+            maxHeight: "80vh",
+            background: "white",
+            borderRadius: "18px",
+            padding: "24px 24px 18px",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
+            display: "flex",
+            flexDirection: "column",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "16px",
+            }}
+          >
+            <div>
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: "1.6rem",
+                  color: "#2c3e50",
+                }}
+              >
+                📱 Device UUID Name Manager
+              </h2>
+            </div>
+            <button
+              onClick={() => {
+                setShowDeviceManager(false);
+                setSelectDeviceUUIDForEdit("");
+              }}
+              style={{
+                border: "none",
+                background: "#e74c3c",
+                color: "white",
+                borderRadius: "50%",
+                width: "36px",
+                height: "36px",
+                fontSize: "18px",
+                cursor: "pointer",
+                fontWeight: "bold",
+              }}
+            >
+              ×
+            </button>
+          </div>
+
+          <div
+            style={{
+              marginBottom: "14px",
+              display: "flex",
+              gap: "10px",
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <select
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                flex: 1,
+                minWidth: "220px",
+                padding: "10px 12px",
+                borderRadius: "10px",
+                border: "2px solid #e9ecef",
+                fontSize: "0.9rem",
+                background: "white",
+              }}
+            >
+              <option value="">🔍 All Device UUIDs</option>
+              {uniqueUUIDs
+                .slice()
+                .sort()
+                .map((uuid) => (
+                  <option key={uuid} value={uuid}>
+                    {getDeviceUUIDLabel(uuid) ? `${getDeviceUUIDLabel(uuid)} (${uuid})` : uuid}
+                  </option>
+                ))}
+            </select>
+
+            <button
+              onClick={handleSaveAll}
+              style={{
+                padding: "10px 18px",
+                borderRadius: "10px",
+                border: "none",
+                background: "#27ae60",
+                color: "white",
+                fontWeight: "bold",
+                cursor: "pointer",
+              }}
+            >
+              💾 Save All
+            </button>
+          </div>
+
+          <div
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              borderRadius: "12px",
+              border: "1px solid #ecf0f1",
+              padding: "10px",
+              background: "#f8f9fa",
+            }}
+          >
+            {filteredUUIDs.length === 0 ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "30px 10px",
+                  color: "#7f8c8d",
+                  fontSize: "0.95rem",
+                }}
+              >
+                No Device UUIDs found. Wait for screenshots to load.
+              </div>
+            ) : (
+              filteredUUIDs.map((uuid) => (
+                <div
+                  key={uuid}
+                  style={{
+                    background: "white",
+                    borderRadius: "10px",
+                    padding: "10px 12px",
+                    marginBottom: "8px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "0.85rem",
+                      color: "#7f8c8d",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: "10px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span>
+                      <b>Device UUID:</b> {uuid}
+                    </span>
+                    {localNames[uuid] && (
+                      <span style={{ color: "#27ae60", fontWeight: "bold" }}>
+                        Name: {localNames[uuid]}
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <input
+                      type="text"
+                      placeholder="Eg: John's Laptop, Office PC, QA Machine..."
+                      value={localNames[uuid] || ""}
+                      onChange={(e) => handleChange(uuid, e.target.value)}
+                      style={{
+                        flex: 1,
+                        minWidth: "180px",
+                        padding: "8px 10px",
+                        borderRadius: "8px",
+                        border: "1px solid #dfe4ea",
+                        fontSize: "0.9rem",
+                      }}
+                    />
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const updated = {
+                          ...localNames,
+                          [uuid]: "",
+                        };
+                        handleChange(uuid, "");
+                        persistDeviceUUIDNames(updated);
+                        await clearDeviceUUIDNameOnServer(uuid);
+                      }}
+                      style={{
+                        border: "none",
+                        background: "#e0e0e0",
+                        borderRadius: "8px",
+                        padding: "6px 10px",
+                        fontSize: "0.8rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div
@@ -602,6 +925,35 @@ export default function ViewScreenshots() {
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
             <button
               onClick={() => {
+                setShowDeviceManager(true);
+                setSelectDeviceUUIDForEdit("");
+              }}
+              style={{
+                padding: "10px 18px",
+                backgroundColor: "#51a730",
+                color: "white",
+                border: "none",
+                borderRadius: "10px",
+                cursor: "pointer",
+                fontWeight: "bold",
+                fontSize: "0.95rem",
+                boxShadow: "0 4px 15px rgba(81, 167, 48, 0.3)",
+                transition: "all 0.3s ease",
+              }}
+              onMouseOver={(e) => {
+                e.target.style.transform = "translateY(-2px)";
+                e.target.style.boxShadow = "0 6px 20px rgba(81, 167, 48, 0.4)";
+              }}
+              onMouseOut={(e) => {
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow = "0 4px 15px rgba(81, 167, 48, 0.3)";
+              }}
+            >
+              📱 Manage Device UUID Names
+            </button>
+           
+            <button
+              onClick={() => {
                 setShowMacManager(true);
                 setSelectedMacForEdit("");
               }}
@@ -616,6 +968,14 @@ export default function ViewScreenshots() {
                 fontSize: "0.95rem",
                 boxShadow: "0 4px 15px rgba(155, 89, 182, 0.3)",
                 transition: "all 0.3s ease",
+              }}
+              onMouseOver={(e) => {
+                e.target.style.transform = "translateY(-2px)";
+                e.target.style.boxShadow = "0 6px 20px rgba(155, 89, 182, 0.4)";
+              }}
+              onMouseOut={(e) => {
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow = "0 4px 15px rgba(155, 89, 182, 0.3)";
               }}
             >
               🧾 Manage MAC Names
@@ -785,7 +1145,7 @@ export default function ViewScreenshots() {
                 <option value="">All UUIDs</option>
                 {uniqueUUIDs.map((uuid) => (
                   <option key={uuid} value={uuid}>
-                    {uuid}
+                    {getDeviceUUIDLabel(uuid) ? `${getDeviceUUIDLabel(uuid)} (${uuid})` : uuid}
                   </option>
                 ))}
               </select>
@@ -856,6 +1216,7 @@ export default function ViewScreenshots() {
             {filteredData.map((item) => {
               const imageUrl = getEmbeddedImageUrl(item.driveURL);
               const macLabel = getMacLabel(item.serverMac);
+              const deviceUUIDLabel = getDeviceUUIDLabel(item.deviceUUID);
 
               return (
                 <div
@@ -931,6 +1292,41 @@ export default function ViewScreenshots() {
                     <b>📅 Date:</b> {new Date(item.createdAt).toLocaleString()}
                   </p>
 
+                  {/* Device UUID Info */}
+                  {item.deviceUUID && (
+                    <p style={{ margin: "8px 0", fontSize: "14px" }}>
+                      <b>📱 Device:</b>{" "}
+                      {deviceUUIDLabel ? (
+                        <>
+                          {deviceUUIDLabel}
+                          <span style={{ color: "#7f8c8d" }}> ({item.deviceUUID})</span>
+                        </>
+                      ) : (
+                        item.deviceUUID
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectDeviceUUIDForEdit(item.deviceUUID);
+                          setShowDeviceManager(true);
+                        }}
+                        style={{
+                          marginLeft: "10px",
+                          padding: "4px 8px",
+                          fontSize: "12px",
+                          borderRadius: "8px",
+                          border: "none",
+                          cursor: "pointer",
+                          background: "#51a730",
+                          color: "white",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        ✏️ Edit name
+                      </button>
+                    </p>
+                  )}
+
                   {/* Device Info */}
                   {item.deviceInfo && (
                     <div style={{ marginTop: "10px" }}>
@@ -1002,7 +1398,9 @@ export default function ViewScreenshots() {
 
       {/* MAC Name Manager Page/Overlay */}
       {showMacManager && <MacNameManager />}
+      
+      {/* Device UUID Name Manager Page/Overlay */}
+      {showDeviceManager && <DeviceUUIDNameManager />}
     </>
   );
 }
-

@@ -18,19 +18,67 @@ function App() {
 function AppContent() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [browserName, setBrowserName] = useState("");
+  const [browserChecked, setBrowserChecked] = useState(false);
+  const [browserError, setBrowserError] = useState("");
+
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Check if user is logged in from localStorage on component mount
   useEffect(() => {
-    checkStoredAuth();
+    const detectBrowser = () => {
+      if (typeof navigator === "undefined") {
+        setBrowserName("unknown");
+        setBrowserError(
+          "Unable to detect browser. Please open this app in Google Chrome."
+        );
+        setBrowserChecked(true);
+        setIsLoading(false);
+        return;
+      }
+
+      const ua = navigator.userAgent.toLowerCase();
+      let name = "other";
+
+      if (ua.includes("chrome") && !ua.includes("edg") && !ua.includes("opr")) {
+        name = "chrome";
+      } else if (ua.includes("firefox")) {
+        name = "firefox";
+      } else if (ua.includes("safari") && !ua.includes("chrome")) {
+        name = "safari";
+      } else if (ua.includes("edg")) {
+        name = "edge";
+      } else if (ua.includes("opr")) {
+        name = "opera";
+      }
+
+      setBrowserName(name);
+
+      if (name !== "chrome") {
+        setBrowserError(
+          "This application can only be used in Google Chrome desktop browser.\n\nPlease close this tab and open it again using Chrome."
+        );
+        setBrowserChecked(true);
+        setIsLoading(false);
+        return false;
+      }
+
+      setBrowserChecked(true);
+      return true;
+    };
+
+    const isChrome = detectBrowser();
+    if (isChrome) {
+      checkStoredAuth();
+    }
   }, []);
 
   const checkStoredAuth = () => {
     try {
       const userData = localStorage.getItem('userData');
       const authToken = localStorage.getItem('authToken');
-      
+
       if (userData && authToken) {
         const parsedUser = JSON.parse(userData);
         setUser(parsedUser);
@@ -50,13 +98,13 @@ function AppContent() {
   // Handle authentication
   const handleAuth = (userData) => {
     setUser(userData);
-    
+
     // Save to localStorage
     localStorage.setItem('userData', JSON.stringify(userData));
     localStorage.setItem('authToken', userData.token || 'dummy-token');
     localStorage.setItem('userRole', userData.role || 'user');
     localStorage.setItem('isAuthenticated', 'true');
-    
+
     // DON'T redirect - stay on current page
     console.log("User logged in, staying on current page");
   };
@@ -75,26 +123,137 @@ function AppContent() {
     console.log("User logged out, staying on current page");
   };
 
-  // Show loading while checking auth
+  if (!browserChecked) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          color: "white",
+          fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+        }}
+      >
+        <div
+          style={{
+            background: "rgba(255, 255, 255, 0.1)",
+            padding: "40px",
+            borderRadius: "20px",
+            backdropFilter: "blur(10px)",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+            textAlign: "center"
+          }}
+        >
+          <div style={{ fontSize: "48px", marginBottom: "20px" }}>🌐</div>
+          <h3 style={{ margin: "0 0 10px 0", fontSize: "24px" }}>
+            Checking browser...
+          </h3>
+          <p style={{ margin: 0, opacity: 0.8 }}>
+            Please wait while we verify your browser.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // 🚫 If NOT Chrome → show Unsupported Browser screen
+  if (browserError) {
+    return (
+      <div
+        style={{
+          padding: 20,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          textAlign: "center",
+          background: "linear-gradient(135deg, #ff6a6a 0%, #b31217 100%)",
+          color: "white",
+          fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+        }}
+      >
+        <div
+          style={{
+            background: "rgba(255, 255, 255, 0.1)",
+            padding: 30,
+            borderRadius: 15,
+            backdropFilter: "blur(10px)",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+            maxWidth: 500,
+            width: "100%"
+          }}
+        >
+          <div style={{ fontSize: 48, marginBottom: 15 }}>🌐</div>
+          <h1 style={{ margin: "0 0 10px 0", fontSize: 24 }}>
+            Unsupported Browser
+          </h1>
+          <p
+            style={{
+              margin: 0,
+              opacity: 0.9,
+              fontSize: 16,
+              whiteSpace: "pre-line"
+            }}
+          >
+            {browserError}
+          </p>
+          <div
+            style={{
+              fontSize: 14,
+              marginTop: 15,
+              opacity: 0.8,
+              padding: "10px",
+              background: "rgba(255, 255, 255, 0.1)",
+              borderRadius: "8px"
+            }}
+          >
+            <strong>Tip:</strong> Install{" "}
+            <span style={{ textDecoration: "underline" }}>
+              Google Chrome (latest version)
+            </span>{" "}
+            and open this link there.
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              marginTop: 8,
+              opacity: 0.7
+            }}
+          >
+            Detected browser:{" "}
+            <strong>{browserName.toUpperCase() || "UNKNOWN"}</strong>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
-      <div style={{
-        minHeight: "100vh",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-        color: "white",
-        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
-      }}>
-        <div style={{
-          background: "rgba(255, 255, 255, 0.1)",
-          padding: "40px",
-          borderRadius: "20px",
-          backdropFilter: "blur(10px)",
-          border: "1px solid rgba(255, 255, 255, 0.2)",
-          textAlign: "center"
-        }}>
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          color: "white",
+          fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+        }}
+      >
+        <div
+          style={{
+            background: "rgba(255, 255, 255, 0.1)",
+            padding: "40px",
+            borderRadius: "20px",
+            backdropFilter: "blur(10px)",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+            textAlign: "center"
+          }}
+        >
           <div style={{ fontSize: "48px", marginBottom: "20px" }}>⏳</div>
           <h3 style={{ margin: "0 0 10px 0", fontSize: "24px" }}>Loading...</h3>
           <p style={{ margin: 0, opacity: 0.8 }}>Checking authentication</p>
@@ -104,21 +263,24 @@ function AppContent() {
   }
 
   return (
-    <div style={{ 
-      padding: 0, 
-      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", 
-      position: "relative",
-      minHeight: "100vh",
-      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-    }}>
-      
+    <div
+      style={{
+        padding: 0,
+        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+        position: "relative",
+        minHeight: "100vh",
+        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+      }}
+    >
       {/* LOGIN/LOGOUT BUTTON */}
-      <div style={{
-        position: "absolute",
-        top: 20,
-        right: 20,
-        zIndex: 1000
-      }}>
+      <div
+        style={{
+          position: "absolute",
+          top: 20,
+          right: 20,
+          zIndex: 1000
+        }}
+      >
         {user ? (
           <button
             onClick={handleLogout}
@@ -143,7 +305,7 @@ function AppContent() {
               e.target.style.transform = "scale(1)";
             }}
           >
-          Logout
+           Logout 
           </button>
         ) : (
     
@@ -153,51 +315,70 @@ function AppContent() {
       </div>
 
       {user && (
-        <div style={{
-          background: "rgba(255, 255, 255, 0.1)",
-          padding: "20px",
-          borderRadius: "0 0 20px 20px",
-          backdropFilter: "blur(10px)",
-          borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
-          textAlign: "center"
-        }}>
-          <h2 style={{ 
-            margin: 0, 
-            color: "white",
-            fontSize: "28px",
-            fontWeight: "300"
-          }}>
+        <div
+          style={{
+            background: "rgba(255, 255, 255, 0.1)",
+            padding: "20px",
+            borderRadius: "0 0 20px 20px",
+            backdropFilter: "blur(10px)",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
+            textAlign: "center"
+          }}
+        >
+          <h2
+            style={{
+              margin: 0,
+              color: "white",
+              fontSize: "28px",
+              fontWeight: "300"
+            }}
+          >
             Welcome, <span style={{ fontWeight: "600" }}>{user.name}</span>
           </h2>
-          <div style={{
-            color: "rgba(255, 255, 255, 0.8)",
-            fontSize: "14px",
-            marginTop: "5px"
-          }}>
-            Role: <span style={{ 
-              background: user.role === 'admin' ? "rgba(255, 0, 0, 0.3)" : "rgba(255, 255, 255, 0.2)",
-              padding: "2px 12px",
-              borderRadius: "12px",
-              fontSize: "12px",
-              fontWeight: "600"
-            }}>{user.role}</span>
+          <div
+            style={{
+              color: "rgba(255, 255, 255, 0.8)",
+              fontSize: "14px",
+              marginTop: "5px"
+            }}
+          >
+            Role:{" "}
+            <span
+              style={{
+                background:
+                  user.role === "admin"
+                    ? "rgba(255, 0, 0, 0.3)"
+                    : "rgba(255, 255, 255, 0.2)",
+                padding: "2px 12px",
+                borderRadius: "12px",
+                fontSize: "12px",
+                fontWeight: "600"
+              }}
+            >
+              {user.role}
+            </span>
           </div>
         </div>
       )}
 
-      <div style={{
-        display: "flex",
-        justifyContent: "center",
-        gap: "15px",
-        padding: "20px",
-        flexWrap: "wrap"
-      }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          gap: "15px",
+          padding: "20px",
+          flexWrap: "wrap"
+        }}
+      >
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate("/")}
           style={{
             padding: "12px 25px",
             borderRadius: "50px",
-            backgroundColor: location.pathname === '/' ? "rgba(255, 255, 255, 0.3)" : "rgba(255, 255, 255, 0.15)",
+            backgroundColor:
+              location.pathname === "/"
+                ? "rgba(255, 255, 255, 0.3)"
+                : "rgba(255, 255, 255, 0.15)",
             color: "white",
             border: "1px solid rgba(255, 255, 255, 0.3)",
             cursor: "pointer",
@@ -207,13 +388,13 @@ function AppContent() {
             transition: "all 0.3s ease"
           }}
           onMouseOver={(e) => {
-            if (location.pathname !== '/') {
+            if (location.pathname !== "/") {
               e.target.style.backgroundColor = "rgba(255, 255, 255, 0.25)";
               e.target.style.transform = "scale(1.05)";
             }
           }}
           onMouseOut={(e) => {
-            if (location.pathname !== '/') {
+            if (location.pathname !== "/") {
               e.target.style.backgroundColor = "rgba(255, 255, 255, 0.15)";
               e.target.style.transform = "scale(1)";
             }
@@ -224,11 +405,14 @@ function AppContent() {
 
         {user?.role === "admin" && (
           <button
-            onClick={() => navigate('/screenshots')}
+            onClick={() => navigate("/screenshots")}
             style={{
               padding: "12px 25px",
               borderRadius: "50px",
-              backgroundColor: location.pathname === '/screenshots' ? "rgba(255, 255, 255, 0.3)" : "rgba(255, 255, 255, 0.15)",
+              backgroundColor:
+                location.pathname === "/screenshots"
+                  ? "rgba(255, 255, 255, 0.3)"
+                  : "rgba(255, 255, 255, 0.15)",
               color: "white",
               border: "1px solid rgba(255, 255, 255, 0.3)",
               cursor: "pointer",
@@ -238,13 +422,13 @@ function AppContent() {
               transition: "all 0.3s ease"
             }}
             onMouseOver={(e) => {
-              if (location.pathname !== '/screenshots') {
+              if (location.pathname !== "/screenshots") {
                 e.target.style.backgroundColor = "rgba(255, 255, 255, 0.25)";
                 e.target.style.transform = "scale(1.05)";
               }
             }}
             onMouseOut={(e) => {
-              if (location.pathname !== '/screenshots') {
+              if (location.pathname !== "/screenshots") {
                 e.target.style.backgroundColor = "rgba(255, 255, 255, 0.15)";
                 e.target.style.transform = "scale(1)";
               }
@@ -255,71 +439,80 @@ function AppContent() {
         )}
       </div>
 
-      <div style={{
-        padding: "20px",
-        minHeight: "calc(100vh - 120px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center"
-      }}>
+      <div
+        style={{
+          padding: "20px",
+          minHeight: "calc(100vh - 120px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }}
+      >
         <Routes>
           {/* Home Route - Screen Monitor (Accessible to all) */}
-          <Route 
-            path="/" 
+          <Route
+            path="/"
             element={
-              <div style={{ width: "100%", maxWidth: "70%",  }}>
+              <div style={{ width: "100%", maxWidth: "70%" }}>
                 <ScreenMonitor userId={user?._id || "guest"} />
               </div>
-            } 
+            }
           />
 
-          <Route 
-            path="/login" 
+          <Route
+            path="/login"
             element={
               user ? (
                 <Navigate to={location.state?.from?.pathname || "/"} replace />
               ) : (
-<div style={{width:"100%"}}>
-                  <AuthForm
-                  onAuth={handleAuth}
-                  onBack={() => navigate('/')}
-                />
-</div>
+                <div style={{ width: "100%" }}>
+                  <AuthForm onAuth={handleAuth} onBack={() => navigate("/")} />
+                </div>
               )
-            } 
+            }
           />
 
-          <Route 
-            path="/screenshots" 
+          <Route
+            path="/screenshots"
             element={
               user?.role === "admin" ? (
-                <div style={{
-                  width: "100%",
-                  maxWidth: "1200px",
-                  background: "rgba(255, 255, 255, 0.1)",
-                  borderRadius: "20px",
-                  backdropFilter: "blur(10px)",
-                  border: "1px solid rgba(255, 255, 255, 0.2)",
-                  overflow: "hidden"
-                }}>
+                <div
+                  style={{
+                    width: "100%",
+                    maxWidth: "1200px",
+                    background: "rgba(255, 255, 255, 0.1)",
+                    borderRadius: "20px",
+                    backdropFilter: "blur(10px)",
+                    border: "1px solid rgba(255, 255, 255, 0.2)",
+                    overflow: "hidden"
+                  }}
+                >
                   <ViewScreenshots />
                 </div>
               ) : (
-                <div style={{
-                  padding: "40px",
-                  background: "rgba(255, 255, 255, 0.1)",
-                  borderRadius: "20px",
-                  backdropFilter: "blur(10px)",
-                  border: "1px solid rgba(255, 255, 255, 0.2)",
-                  textAlign: "center",
-                  color: "white"
-                }}>
+                <div
+                  style={{
+                    padding: "40px",
+                    background: "rgba(255, 255, 255, 0.1)",
+                    borderRadius: "20px",
+                    backdropFilter: "blur(10px)",
+                    border: "1px solid rgba(255, 255, 255, 0.2)",
+                    textAlign: "center",
+                    color: "white"
+                  }}
+                >
                   <div style={{ fontSize: "48px", marginBottom: "20px" }}>⛔</div>
-                  <h3 style={{ margin: "0 0 10px 0", fontSize: "24px" }}>Admin Access Required</h3>
-                  <p style={{ margin: 0, opacity: 0.8 }}>This page is only accessible to admin users</p>
+                  <h3
+                    style={{ margin: "0 0 10px 0", fontSize: "24px" }}
+                  >
+                    Admin Access Required
+                  </h3>
+                  <p style={{ margin: 0, opacity: 0.8 }}>
+                    This page is only accessible to admin users
+                  </p>
                   {!user ? (
                     <button
-                      onClick={() => navigate('/login')}
+                      onClick={() => navigate("/login")}
                       style={{
                         marginTop: "20px",
                         padding: "10px 20px",
@@ -334,7 +527,7 @@ function AppContent() {
                     </button>
                   ) : (
                     <button
-                      onClick={() => navigate('/')}
+                      onClick={() => navigate("/")}
                       style={{
                         marginTop: "20px",
                         padding: "10px 20px",
@@ -350,7 +543,7 @@ function AppContent() {
                   )}
                 </div>
               )
-            } 
+            }
           />
 
           <Route path="*" element={<Navigate to="/" replace />} />

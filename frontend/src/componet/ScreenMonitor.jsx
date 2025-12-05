@@ -1,4 +1,3 @@
-
 import React, {
   useEffect,
   useState,
@@ -40,7 +39,54 @@ export default function ScreenMonitor() {
   const CAPTURE_COUNT_KEY = "screenMonitor_captureCount";
 
   const [multipleInstanceError, setMultipleInstanceError] = useState("");
+  const BACKUP_COOKIE_NAME = "screenMonitorBackup";
 
+  // ⏱ backup cookie save
+  const saveBackupToCookie = (overrides = {}) => {
+    try {
+      const data = {
+        timerValue: parseInt(
+          localStorage.getItem(TIMER_STORAGE_KEY) || "0",
+          10
+        ),
+        isStarted: localStorage.getItem(TIMER_STARTED_KEY) === "true",
+        date:
+          localStorage.getItem(TIMER_START_DATE_KEY) ||
+          new Date().toDateString(),
+        captureCount: parseInt(
+          localStorage.getItem(CAPTURE_COUNT_KEY) || "0",
+          10
+        ),
+        lastCaptureTime:
+          localStorage.getItem(LAST_CAPTURE_TIME_KEY) || null,
+        ...overrides,
+      };
+
+      const encoded = btoa(JSON.stringify(data));
+      document.cookie = `${BACKUP_COOKIE_NAME}=${encoded}; path=/; max-age=${
+        60 * 60 * 24 * 30
+      }`;
+    } catch (e) {
+      console.error("Failed to save backup cookie:", e);
+    }
+  };
+
+  const readBackupFromCookie = () => {
+    try {
+      const cookie = document.cookie
+        .split("; ")
+        .find((c) => c.startsWith(BACKUP_COOKIE_NAME + "="));
+      if (!cookie) return null;
+
+      const value = cookie.split("=")[1];
+      return JSON.parse(atob(value));
+    } catch (e) {
+      console.error("Failed to read backup cookie:", e);
+      return null;
+    }
+  };
+
+  // 🔎 Browser detection + single-tab check
   useEffect(() => {
     const detectBrowser = () => {
       const userAgent = navigator.userAgent.toLowerCase();
@@ -59,7 +105,9 @@ export default function ScreenMonitor() {
 
     detectBrowser();
 
-    const thisTabId = `screenMonitor_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const thisTabId = `screenMonitor_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
     const activeTabKey = "screenMonitor_activeTab";
 
     const existingActiveTab = localStorage.getItem(activeTabKey);
@@ -70,7 +118,7 @@ export default function ScreenMonitor() {
 
     localStorage.setItem(activeTabKey, thisTabId);
 
-    window.addEventListener('beforeunload', () => {
+    window.addEventListener("beforeunload", () => {
       const currentActive = localStorage.getItem(activeTabKey);
       if (currentActive === thisTabId) {
         localStorage.removeItem(activeTabKey);
@@ -108,6 +156,7 @@ export default function ScreenMonitor() {
     return btoa(components.join("|")).substring(0, 32);
   };
 
+  // FingerprintJS
   useEffect(() => {
     const initializeFingerprint = async () => {
       try {
@@ -128,53 +177,95 @@ export default function ScreenMonitor() {
     initializeFingerprint();
   }, []);
 
+  // UUID for device
   const getOrCreateUUID = useCallback(() => {
     let existing = localStorage.getItem("deviceUUID");
     if (existing) {
-      document.cookie = `deviceUUID=${existing}; path=/; max-age=${60 * 60 * 24 * 365
-        }`;
+      document.cookie = `deviceUUID=${existing}; path=/; max-age=${
+        60 * 60 * 24 * 365
+      }`;
       return existing;
     }
 
     const newId = uuidv4();
     localStorage.setItem("deviceUUID", newId);
-    document.cookie = `deviceUUID=${newId}; path=/; max-age=${60 * 60 * 24 * 365
-      }`;
+    document.cookie = `deviceUUID=${newId}; path=/; max-age=${
+      60 * 60 * 24 * 365
+    }`;
     return newId;
   }, []);
 
+  // ⏱ init timer (localStorage + cookie restore)
   useEffect(() => {
+    const initFromStorageOrBackup = () => {
+      const currentDate = new Date().toDateString();
 
-    const savedTimerValue = localStorage.getItem(TIMER_STORAGE_KEY);
-    const savedStartDate = localStorage.getItem(TIMER_START_DATE_KEY);
-    const savedIsStarted = localStorage.getItem(TIMER_STARTED_KEY);
-    const savedLastCapture = localStorage.getItem(LAST_CAPTURE_TIME_KEY);
-    const savedCaptureCount = localStorage.getItem(CAPTURE_COUNT_KEY);
+      let savedTimerValue = localStorage.getItem(TIMER_STORAGE_KEY);
+      let savedStartDate = localStorage.getItem(TIMER_START_DATE_KEY);
+      let savedIsStarted = localStorage.getItem(TIMER_STARTED_KEY);
+      let savedLastCapture = localStorage.getItem(LAST_CAPTURE_TIME_KEY);
+      let savedCaptureCount = localStorage.getItem(CAPTURE_COUNT_KEY);
 
-    const currentDate = new Date().toDateString();
+      // 1) localStorage khali hai → cookie se restore try karo
+      if (!savedTimerValue && !savedStartDate && !savedIsStarted) {
+        const backup = readBackupFromCookie();
+        if (backup) {
+          if (backup.date === currentDate) {
 
-    if (savedStartDate && savedStartDate !== currentDate) {
-      resetTimerStorage();
-      setTimerValue(0);
-      setCaptureCount(0);
-      setLastCaptureTime(null);
-      setIsStarted(false);
-    } else if (savedIsStarted === "true" && savedTimerValue) {
-      const savedValue = parseInt(savedTimerValue, 10);
-      setTimerValue(savedValue);
-      setIsStarted(false);
+            savedTimerValue =
+              backup.timerValue != null ? String(backup.timerValue) : null;
+            savedStartDate = backup.date;
+            savedIsStarted = backup.isStarted ? "true" : "false";
+            savedCaptureCount =
+              backup.captureCount != null ? String(backup.captureCount) : null;
+            savedLastCapture = backup.lastCaptureTime || null;
 
-      if (savedCaptureCount) {
-        setCaptureCount(parseInt(savedCaptureCount, 10));
+            if (savedTimerValue) {
+              localStorage.setItem(TIMER_STORAGE_KEY, savedTimerValue);
+            }
+            if (savedStartDate) {
+              localStorage.setItem(TIMER_START_DATE_KEY, savedStartDate);
+            }
+            if (savedCaptureCount) {
+              localStorage.setItem(CAPTURE_COUNT_KEY, savedCaptureCount);
+            }
+            if (savedLastCapture) {
+              localStorage.setItem(LAST_CAPTURE_TIME_KEY, savedLastCapture);
+            }
+            localStorage.setItem(TIMER_STARTED_KEY, "false");
+          } else {
+            document.cookie = `${BACKUP_COOKIE_NAME}=; path=/; max-age=0`;
+          }
+        }
       }
 
-      if (savedLastCapture) {
-        setLastCaptureTime(new Date(savedLastCapture));
+      const currentTimer = savedTimerValue
+        ? parseInt(savedTimerValue, 10) || 0
+        : 0;
+
+      if (savedStartDate && savedStartDate !== currentDate) {
+        resetTimerStorage();
+        setTimerValue(0);
+        setCaptureCount(0);
+        setLastCaptureTime(null);
+        setIsStarted(false);
+      } else if (currentTimer > 0) {
+        setTimerValue(currentTimer);
+        setIsStarted(false);
+
+        if (savedCaptureCount) {
+          setCaptureCount(parseInt(savedCaptureCount, 10) || 0);
+        }
+
+        if (savedLastCapture) {
+          setLastCaptureTime(new Date(savedLastCapture));
+        }
+      } else {
+        setTimerValue(0);
+        setIsStarted(false);
       }
-    } else {
-      setTimerValue(0);
-      setIsStarted(false);
-    }
+    };
+    initFromStorageOrBackup();
 
     checkAdminStatus();
     const interval = setInterval(checkAdminStatus, 5000);
@@ -194,6 +285,10 @@ export default function ScreenMonitor() {
         const currentDate = new Date().toDateString();
         localStorage.setItem(TIMER_START_DATE_KEY, currentDate);
       }
+      saveBackupToCookie({
+        timerValue: value,
+        isStarted: isStartedFlag,
+      });
     } catch (error) {
       console.error("Error saving timer to storage:", error);
     }
@@ -205,6 +300,8 @@ export default function ScreenMonitor() {
       localStorage.removeItem(TIMER_START_DATE_KEY);
       localStorage.removeItem(TIMER_STARTED_KEY);
       localStorage.removeItem(LAST_CAPTURE_TIME_KEY);
+      localStorage.removeItem(CAPTURE_COUNT_KEY);
+      document.cookie = `${BACKUP_COOKIE_NAME}=; path=/; max-age=0`;
     } catch (error) {
       console.error("Error resetting timer storage:", error);
     }
@@ -221,10 +318,6 @@ export default function ScreenMonitor() {
         setTimerValue((prev) => {
           const newValue = prev + 1;
           saveTimerToStorage(newValue, true);
-
-          if (newValue % 60 === 0) {
-          }
-
           return newValue;
         });
       }, 1000);
@@ -234,12 +327,11 @@ export default function ScreenMonitor() {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
-
       }
     };
   }, [isStarted, isAdmin]);
 
-  // 📸 Auto-capture hook
+
   useEffect(() => {
     if (!isStarted || isAdmin) return;
     if (timerValue === 0) return;
@@ -272,6 +364,10 @@ export default function ScreenMonitor() {
           setCaptureCount(newCount);
           localStorage.setItem(CAPTURE_COUNT_KEY, newCount.toString());
 
+          saveBackupToCookie({
+            captureCount: newCount,
+            lastCaptureTime: now.toISOString(),
+          });
         } catch (err) {
           console.error("❌ Capture failed:", err);
         }
@@ -558,13 +654,13 @@ export default function ScreenMonitor() {
       if (!isEntireScreen) {
 
         track.stop();
-        stream.getTracks().forEach(t => t.stop());
+        stream.getTracks().forEach((t) => t.stop());
 
         let errorMessage = "";
         if (browserName.current === "firefox") {
           errorMessage = "Please select 'Entire Screen' NOT 'Window' or 'Tab'. Timer will NOT start.";
         } else if (browserName.current === "chrome" || browserName.current === "edge") {
-          if (detectedSurface === "window") {
+          if (detectedSurface === "window") { 
             errorMessage = "❌ You selected 'Application Window'. This is NOT allowed.\n\n";
             errorMessage += "✅ SOLUTION: Close this popup and click 'Start Your Day' again.\n";
             errorMessage += "👉 In the Chrome popup, make sure 'Entire Screen' is selected (NOT Chrome Tab or Application Window).\n";
@@ -701,8 +797,8 @@ export default function ScreenMonitor() {
 
 
       const response = await fetch("https://screenshot-chapter.onrender.com/upload-screenshot", {
-        method: "POST",
-        body: formData,
+          method: "POST",
+          body: formData,
       });
 
       if (!response.ok) {
@@ -718,7 +814,7 @@ export default function ScreenMonitor() {
         if (result.deviceUUID && result.deviceUUID !== deviceUUID) {
           localStorage.setItem("deviceUUID", result.deviceUUID);
           document.cookie = `deviceUUID=${result.deviceUUID}; path=/; max-age=${60 * 60 * 24 * 365
-            }`;
+          }`;
         }
       } else {
         console.error("Upload failed:", result.error);
@@ -996,11 +1092,11 @@ export default function ScreenMonitor() {
             {multipleInstanceError}
           </p>
           <div style={{
-            fontSize: 14,
-            marginTop: 15,
-            opacity: 0.7,
-            padding: "10px",
-            background: "rgba(255, 255, 255, 0.1)",
+              fontSize: 14,
+              marginTop: 15,
+              opacity: 0.7,
+              padding: "10px",
+              background: "rgba(255, 255, 255, 0.1)",
             borderRadius: "8px"
           }}>
             <strong>Solution:</strong> Close this tab and use only one Screen Monitor instance
@@ -1140,19 +1236,19 @@ export default function ScreenMonitor() {
               {!fpLoaded
                 ? "Initializing Device ID..."
                 : isInitializingCapture
-                  ? `Verifying Entire Screen Access...`
-                  : localStorage.getItem(TIMER_STARTED_KEY) === "true"
+                ? `Verifying Entire Screen Access...`
+                : localStorage.getItem(TIMER_STARTED_KEY) === "true"
                     ? `Resume Your Day (${formatTimer(parseInt(localStorage.getItem(TIMER_STORAGE_KEY) || "0", 10))})`
-                    : "Start Your Day"}
+                : "Start Your Day"}
             </button>
 
             <div style={{
-              marginTop: "15px",
-              padding: "10px",
-              background: "rgba(162, 204, 211, 0.1)",
-              borderRadius: "6px",
-              fontSize: "12px",
-              textAlign: "left",
+                marginTop: "15px",
+                padding: "10px",
+                background: "rgba(162, 204, 211, 0.1)",
+                borderRadius: "6px",
+                fontSize: "12px",
+                textAlign: "left",
               border: "1px solid rgba(235, 202, 191, 0.3)"
             }}>
               <div style={{ fontWeight: "bold", marginBottom: "5px", color: "#ffff" }}>
@@ -1166,10 +1262,10 @@ export default function ScreenMonitor() {
               <div>• Wrong selection = Timer will NOT start</div>
 
               <div style={{
-                marginTop: "8px",
-                fontSize: "11px",
-                opacity: 0.7,
-                borderTop: "1px solid rgba(255,87,34,0.2)",
+                  marginTop: "8px",
+                  fontSize: "11px",
+                  opacity: 0.7,
+                  borderTop: "1px solid rgba(255,87,34,0.2)",
                 paddingTop: "5px"
               }}>
                 Current Browser: <strong>{browserName.current.toUpperCase()}</strong>

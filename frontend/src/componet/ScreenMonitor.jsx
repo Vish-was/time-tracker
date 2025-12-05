@@ -1006,6 +1006,33 @@ export default function ScreenMonitor() {
     };
   }, []);
 
+  useEffect(() => {
+
+    const now = new Date();
+
+
+    const nextMidnight = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + 1,
+      0, 0, 0, 0
+    );
+
+
+    const msUntilMidnight = nextMidnight - now;
+    const timeout = setTimeout(() => {
+      resetTimerStorage();
+      setTimerValue(0);
+      setCaptureCount(0);
+      setLastCaptureTime(null);
+      setIsStarted(false);
+
+      window.location.reload();
+    }, msUntilMidnight);
+
+    return () => clearTimeout(timeout);
+  }, []);
+
   if (isAdmin) {
     return (
       <div

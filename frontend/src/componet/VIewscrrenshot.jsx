@@ -129,13 +129,22 @@ export default function ViewScreenshots() {
     }
   };
 
-  const getMacLabel = (mac) => {
+  const getMacLabel = (mac, screenshotData) => {
     if (!mac) return "";
+    if (screenshotData && screenshotData.macname) {
+      return screenshotData.macname;
+    }
+    
     return macNames[mac] || "";
   };
 
-  const getDeviceUUIDLabel = (uuid) => {
+  const getDeviceUUIDLabel = (uuid, screenshotData) => {
     if (!uuid) return "";
+    
+    if (screenshotData && screenshotData.deviceUUIDname) {
+      return screenshotData.deviceUUIDname;
+    }
+    
     return deviceUUIDNames[uuid] || "";
   };
 
@@ -149,6 +158,31 @@ export default function ViewScreenshots() {
         const db = new Date(b.createdAt).getTime();
         return db - da; 
       });
+      
+      const newMacNames = { ...macNames };
+      const newDeviceUUIDNames = { ...deviceUUIDNames };
+      
+      list.forEach(item => {
+        if (item.serverMac && item.macname) {
+          newMacNames[item.serverMac] = item.macname;
+        }
+        if (item.deviceUUID && item.deviceUUIDname) {
+          newDeviceUUIDNames[item.deviceUUID] = item.deviceUUIDname;
+        }
+      });
+      
+      // Update states
+      setMacNames(newMacNames);
+      setDeviceUUIDNames(newDeviceUUIDNames);
+      
+      // Save to localStorage
+      try {
+        localStorage.setItem("macNames", JSON.stringify(newMacNames));
+        localStorage.setItem("deviceUUIDNames", JSON.stringify(newDeviceUUIDNames));
+      } catch (err) {
+        console.error("Error saving to localStorage:", err);
+      }
+      
       setData(list);
       setFilteredData(list);
     } catch (error) {
@@ -204,13 +238,36 @@ export default function ViewScreenshots() {
     setFilteredData(filtered);
   }, [dateFilter, osFilter, browserFilter, macFilter, uuidFilter, data]);
 
-  // Unique values for dropdowns
+  // Unique values for dropdowns with names
   const uniqueOS = [...new Set(data.map((item) => item.deviceInfo?.os).filter(Boolean))];
-  const uniqueUUIDs = [...new Set(data.map((item) => item.deviceUUID).filter(Boolean))];
   const uniqueDates = [
     ...new Set(data.map((item) => new Date(item.createdAt).toLocaleDateString())),
   ];
-  const uniqueMACs = [...new Set(data.map((item) => item.serverMac).filter(Boolean))];
+
+  const getUniqueUUIDsWithNames = () => {
+    const uuidMap = new Map();
+    data.forEach(item => {
+      if (item.deviceUUID) {
+        const name = item.deviceUUIDname || deviceUUIDNames[item.deviceUUID] || "";
+        uuidMap.set(item.deviceUUID, name);
+      }
+    });
+    return Array.from(uuidMap.entries()).map(([uuid, name]) => ({ uuid, name }));
+  };
+
+  const getUniqueMACsWithNames = () => {
+    const macMap = new Map();
+    data.forEach(item => {
+      if (item.serverMac) {
+        const name = item.macname || macNames[item.serverMac] || "";
+        macMap.set(item.serverMac, name);
+      }
+    });
+    return Array.from(macMap.entries()).map(([mac, name]) => ({ mac, name }));
+  };
+
+  const uniqueUUIDsWithNames = getUniqueUUIDsWithNames();
+  const uniqueMACsWithNames = getUniqueMACsWithNames();
 
   const clearFilters = () => {
     setDateFilter("");
@@ -341,9 +398,9 @@ export default function ViewScreenshots() {
       setLocalNames(macNames || {});
     }, [macNames]);
 
-    const filteredMacs = uniqueMACs
-      .filter((m) => m.toLowerCase().includes(search.toLowerCase()))
-      .sort();
+    const filteredMacs = uniqueMACsWithNames
+      .filter(({ mac }) => mac.toLowerCase().includes(search.toLowerCase()))
+      .sort((a, b) => a.mac.localeCompare(b.mac));
 
     const handleChange = (mac, value) => {
       setLocalNames((prev) => ({
@@ -370,6 +427,7 @@ export default function ViewScreenshots() {
 
       setShowMacManager(false);
       setSelectedMacForEdit("");
+      fetchScreenshots();
     };
 
     return (
@@ -462,12 +520,12 @@ export default function ViewScreenshots() {
               }}
             >
               <option value="">🔍 All MAC addresses</option>
-              {uniqueMACs
+              {uniqueMACsWithNames
                 .slice()
-                .sort()
-                .map((mac) => (
+                .sort((a, b) => a.mac.localeCompare(b.mac))
+                .map(({ mac, name }) => (
                   <option key={mac} value={mac}>
-                    {getMacLabel(mac) ? `${getMacLabel(mac)} (${mac})` : mac}
+                    {name ? `${name} (${mac})` : mac}
                   </option>
                 ))}
             </select>
@@ -510,86 +568,91 @@ export default function ViewScreenshots() {
                 No MAC addresses found. Wait for screenshots to load.
               </div>
             ) : (
-              filteredMacs.map((mac) => (
-                <div
-                  key={mac}
-                  style={{
-                    background: "white",
-                    borderRadius: "10px",
-                    padding: "10px 12px",
-                    marginBottom: "8px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-                  }}
-                >
+              filteredMacs.map(({ mac }) => {
+                const nameFromDB = data.find(item => item.serverMac === mac)?.macname;
+                const displayName = localNames[mac] || nameFromDB || "";
+                return (
                   <div
+                    key={mac}
                     style={{
-                      fontSize: "0.85rem",
-                      color: "#7f8c8d",
+                      background: "white",
+                      borderRadius: "10px",
+                      padding: "10px 12px",
+                      marginBottom: "8px",
                       display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: "10px",
-                      flexWrap: "wrap",
+                      flexDirection: "column",
+                      gap: "6px",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
                     }}
                   >
-                    <span>
-                      <b>MAC:</b> {mac}
-                    </span>
-                    {localNames[mac] && (
-                      <span style={{ color: "#27ae60", fontWeight: "bold" }}>
-                        Name: {localNames[mac]}
-                      </span>
-                    )}
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "8px",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <input
-                      type="text"
-                      placeholder="Eg: QA Server, Dev Machine, Srajan Laptop..."
-                      value={localNames[mac] || ""}
-                      onChange={(e) => handleChange(mac, e.target.value)}
+                    <div
                       style={{
-                        flex: 1,
-                        minWidth: "180px",
-                        padding: "8px 10px",
-                        borderRadius: "8px",
-                        border: "1px solid #dfe4ea",
-                        fontSize: "0.9rem",
-                      }}
-                    />
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const updated = {
-                          ...localNames,
-                          [mac]: "",
-                        };
-                        handleChange(mac, "");
-                        persistMacNames(updated);
-                        await clearMacNameOnServer(mac);
-                      }}
-                      style={{
-                        border: "none",
-                        background: "#e0e0e0",
-                        borderRadius: "8px",
-                        padding: "6px 10px",
-                        fontSize: "0.8rem",
-                        cursor: "pointer",
+                        fontSize: "0.85rem",
+                        color: "#7f8c8d",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "10px",
+                        flexWrap: "wrap",
                       }}
                     >
-                      Clear
-                    </button>
+                      <span>
+                        <b>MAC:</b> {mac}
+                      </span>
+                      {displayName && (
+                        <span style={{ color: "#27ae60", fontWeight: "bold" }}>
+                          Name: {displayName}
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "8px",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <input
+                        type="text"
+                        placeholder="Eg: QA Server, Dev Machine, Srajan Laptop..."
+                        value={localNames[mac] || ""}
+                        onChange={(e) => handleChange(mac, e.target.value)}
+                        style={{
+                          flex: 1,
+                          minWidth: "180px",
+                          padding: "8px 10px",
+                          borderRadius: "8px",
+                          border: "1px solid #dfe4ea",
+                          fontSize: "0.9rem",
+                        }}
+                      />
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const updated = {
+                            ...localNames,
+                            [mac]: "",
+                          };
+                          handleChange(mac, "");
+                          persistMacNames(updated);
+                          await clearMacNameOnServer(mac);
+                          fetchScreenshots(); 
+                        }}
+                        style={{
+                          border: "none",
+                          background: "#e0e0e0",
+                          borderRadius: "8px",
+                          padding: "6px 10px",
+                          fontSize: "0.8rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -605,9 +668,9 @@ export default function ViewScreenshots() {
       setLocalNames(deviceUUIDNames || {});
     }, [deviceUUIDNames]);
 
-    const filteredUUIDs = uniqueUUIDs
-      .filter((uuid) => uuid.toLowerCase().includes(search.toLowerCase()))
-      .sort();
+    const filteredUUIDs = uniqueUUIDsWithNames
+      .filter(({ uuid }) => uuid.toLowerCase().includes(search.toLowerCase()))
+      .sort((a, b) => a.uuid.localeCompare(b.uuid));
 
     const handleChange = (uuid, value) => {
       setLocalNames((prev) => ({
@@ -634,6 +697,7 @@ export default function ViewScreenshots() {
 
       setShowDeviceManager(false);
       setSelectDeviceUUIDForEdit("");
+      fetchScreenshots(); 
     };
 
     return (
@@ -726,12 +790,12 @@ export default function ViewScreenshots() {
               }}
             >
               <option value="">🔍 All Device UUIDs</option>
-              {uniqueUUIDs
+              {uniqueUUIDsWithNames
                 .slice()
-                .sort()
-                .map((uuid) => (
+                .sort((a, b) => a.uuid.localeCompare(b.uuid))
+                .map(({ uuid, name }) => (
                   <option key={uuid} value={uuid}>
-                    {getDeviceUUIDLabel(uuid) ? `${getDeviceUUIDLabel(uuid)} (${uuid})` : uuid}
+                    {name ? `${name} (${uuid})` : uuid}
                   </option>
                 ))}
             </select>
@@ -774,86 +838,92 @@ export default function ViewScreenshots() {
                 No Device UUIDs found. Wait for screenshots to load.
               </div>
             ) : (
-              filteredUUIDs.map((uuid) => (
-                <div
-                  key={uuid}
-                  style={{
-                    background: "white",
-                    borderRadius: "10px",
-                    padding: "10px 12px",
-                    marginBottom: "8px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-                  }}
-                >
+              filteredUUIDs.map(({ uuid }) => {
+                const nameFromDB = data.find(item => item.deviceUUID === uuid)?.deviceUUIDname;
+                const displayName = localNames[uuid] || nameFromDB || "";
+                
+                return (
                   <div
+                    key={uuid}
                     style={{
-                      fontSize: "0.85rem",
-                      color: "#7f8c8d",
+                      background: "white",
+                      borderRadius: "10px",
+                      padding: "10px 12px",
+                      marginBottom: "8px",
                       display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: "10px",
-                      flexWrap: "wrap",
+                      flexDirection: "column",
+                      gap: "6px",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
                     }}
                   >
-                    <span>
-                      <b>Device UUID:</b> {uuid}
-                    </span>
-                    {localNames[uuid] && (
-                      <span style={{ color: "#27ae60", fontWeight: "bold" }}>
-                        Name: {localNames[uuid]}
-                      </span>
-                    )}
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "8px",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <input
-                      type="text"
-                      placeholder="Eg: John's Laptop, Office PC, QA Machine..."
-                      value={localNames[uuid] || ""}
-                      onChange={(e) => handleChange(uuid, e.target.value)}
+                    <div
                       style={{
-                        flex: 1,
-                        minWidth: "180px",
-                        padding: "8px 10px",
-                        borderRadius: "8px",
-                        border: "1px solid #dfe4ea",
-                        fontSize: "0.9rem",
-                      }}
-                    />
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const updated = {
-                          ...localNames,
-                          [uuid]: "",
-                        };
-                        handleChange(uuid, "");
-                        persistDeviceUUIDNames(updated);
-                        await clearDeviceUUIDNameOnServer(uuid);
-                      }}
-                      style={{
-                        border: "none",
-                        background: "#e0e0e0",
-                        borderRadius: "8px",
-                        padding: "6px 10px",
-                        fontSize: "0.8rem",
-                        cursor: "pointer",
+                        fontSize: "0.85rem",
+                        color: "#7f8c8d",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "10px",
+                        flexWrap: "wrap",
                       }}
                     >
-                      Clear
-                    </button>
+                      <span>
+                        <b>Device UUID:</b> {uuid}
+                      </span>
+                      {displayName && (
+                        <span style={{ color: "#27ae60", fontWeight: "bold" }}>
+                          Name: {displayName}
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "8px",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <input
+                        type="text"
+                        placeholder="Eg: John's Laptop, Office PC, QA Machine..."
+                        value={localNames[uuid] || ""}
+                        onChange={(e) => handleChange(uuid, e.target.value)}
+                        style={{
+                          flex: 1,
+                          minWidth: "180px",
+                          padding: "8px 10px",
+                          borderRadius: "8px",
+                          border: "1px solid #dfe4ea",
+                          fontSize: "0.9rem",
+                        }}
+                      />
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const updated = {
+                            ...localNames,
+                            [uuid]: "",
+                          };
+                          handleChange(uuid, "");
+                          persistDeviceUUIDNames(updated);
+                          await clearDeviceUUIDNameOnServer(uuid);
+                          fetchScreenshots(); // Refresh data
+                        }}
+                        style={{
+                          border: "none",
+                          background: "#e0e0e0",
+                          borderRadius: "8px",
+                          padding: "6px 10px",
+                          fontSize: "0.8rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -1143,9 +1213,9 @@ export default function ViewScreenshots() {
                 }}
               >
                 <option value="">All UUIDs</option>
-                {uniqueUUIDs.map((uuid) => (
+                {uniqueUUIDsWithNames.map(({ uuid, name }) => (
                   <option key={uuid} value={uuid}>
-                    {getDeviceUUIDLabel(uuid) ? `${getDeviceUUIDLabel(uuid)} (${uuid})` : uuid}
+                    {name ? `${name} (${uuid})` : uuid}
                   </option>
                 ))}
               </select>
@@ -1175,9 +1245,9 @@ export default function ViewScreenshots() {
                 }}
               >
                 <option value="">All MACs</option>
-                {uniqueMACs.map((m) => (
-                  <option key={m} value={m}>
-                    {getMacLabel(m) ? `${getMacLabel(m)} (${m})` : m}
+                {uniqueMACsWithNames.map(({ mac, name }) => (
+                  <option key={mac} value={mac}>
+                    {name ? `${name} (${mac})` : mac}
                   </option>
                 ))}
               </select>
@@ -1215,8 +1285,8 @@ export default function ViewScreenshots() {
           >
             {filteredData.map((item) => {
               const imageUrl = getEmbeddedImageUrl(item.driveURL);
-              const macLabel = getMacLabel(item.serverMac);
-              const deviceUUIDLabel = getDeviceUUIDLabel(item.deviceUUID);
+              const macLabel = getMacLabel(item.serverMac, item);
+              const deviceUUIDLabel = getDeviceUUIDLabel(item.deviceUUID, item);
 
               return (
                 <div
@@ -1298,7 +1368,9 @@ export default function ViewScreenshots() {
                       <b>📱 Device:</b>{" "}
                       {deviceUUIDLabel ? (
                         <>
-                          {deviceUUIDLabel}
+                          <span style={{ color: "#27ae60", fontWeight: "bold" }}>
+                            {deviceUUIDLabel}
+                          </span>
                           <span style={{ color: "#7f8c8d" }}> ({item.deviceUUID})</span>
                         </>
                       ) : (
@@ -1358,7 +1430,9 @@ export default function ViewScreenshots() {
                       <b>🔗 Server:</b>{" "}
                       {macLabel ? (
                         <>
-                          {macLabel}
+                          <span style={{ color: "#27ae60", fontWeight: "bold" }}>
+                            {macLabel}
+                          </span>
                           <span style={{ color: "#7f8c8d" }}> ({item.serverMac})</span>
                         </>
                       ) : (
